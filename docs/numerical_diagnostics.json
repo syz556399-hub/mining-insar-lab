@@ -1,0 +1,62 @@
+{
+  "engine": "working-face-integral-2.1",
+  "software_versions": {
+    "software": "2.1.0",
+    "python": "3.11.17",
+    "numpy": "2.4.6",
+    "pillow": "12.3.0"
+  },
+  "scenario": "Face defaults; 128px, 1600m, days 40/52",
+  "convergence": [
+    {
+      "segments": 8,
+      "relative_l2_to_128": 0.019148568626126024,
+      "peak_delta_mm": 154.17368944783524
+    },
+    {
+      "segments": 16,
+      "relative_l2_to_128": 0.0035219715639693712,
+      "peak_delta_mm": 156.13709462829445
+    },
+    {
+      "segments": 32,
+      "relative_l2_to_128": 0.000675448701797708,
+      "peak_delta_mm": 156.6506796095662
+    },
+    {
+      "segments": 64,
+      "relative_l2_to_128": 0.00020281380426550474,
+      "peak_delta_mm": 156.67391723763686
+    },
+    {
+      "segments": 128,
+      "relative_l2_to_128": 0.0,
+      "peak_delta_mm": 156.69625020557112
+    }
+  ],
+  "reference_note": "128 segments is a numerical reference, not an exact continuous-time solution",
+  "complex_pair_diagnostics": [
+    {
+      "model_gamma": 0,
+      "population_correlation_error": 0.0007985047274002363,
+      "mean_sample_magnitude": 0.1568546520440656
+    },
+    {
+      "model_gamma": 0.3,
+      "population_correlation_error": 0.0006588735839205916,
+      "mean_sample_magnitude": 0.32288707403202044
+    },
+    {
+      "model_gamma": 0.7,
+      "population_correlation_error": 0.00028335908876059464,
+      "mean_sample_magnitude": 0.7027748727907955
+    },
+    {
+      "model_gamma": 1,
+      "population_correlation_error": 2.482534153247273e-16,
+      "mean_sample_magnitude": 1.0
+    }
+  ],
+  "gamma_zero_single_sample_coherence_mean": 1.0,
+  "interpretation": "Numerical/statistical verification only. No real-mine error or detection performance measured."
+}

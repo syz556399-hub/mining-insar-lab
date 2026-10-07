@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>采掘干涉实验室</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body class="simple-mode">
+<header><div class="mark">◈</div><div><h1>矿区 InSAR 模拟器 <span>独立版 2.1</span></h1><p>工作面形变 + 地形与水体 + 复数观测</p></div><small>本机计算 · 参数可复现</small></header>
+<nav><button id="scene-tab" class="active">单景模拟</button><button id="batch-tab">生成数据集</button><span id="status" role="status">正在载入…</span></nav>
+<main id="scene-view">
+  <aside>
+    <div class="aside-title"><h2>模拟参数</h2><button id="toggle-settings" class="link mobile">展开设置</button><button id="reset" class="link">重置</button></div>
+    <div class="mode-switch" role="group" aria-label="参数显示模式"><button id="simple-mode" type="button" aria-pressed="true">简洁</button><button id="advanced-mode" type="button" aria-pressed="false">高级</button></div>
+    <p id="mode-hint" class="hint mode-hint">常用参数 · 未显示的参数仍按当前值计算</p>
+    <div id="settings-body">
+      <div class="presets"><button data-preset="single">单工作面</button><button data-preset="overlap" class="selected">重叠工作面</button><button data-preset="staggered">错时推进</button><button data-preset="negative">无开采</button></div>
+      <h3>① 开采与观测时间</h3><div id="time-fields" class="fields"></div><p class="hint">日期是相对第 0 天的天数，图像表示这两期之间的变化。</p>
+      <div class="face-tabs"><button id="face-a" class="active">工作面 A</button><button id="face-b">工作面 B</button></div>
+      <label class="check"><input type="checkbox" id="face-enabled">启用这个工作面</label>
+      <div id="face-fields" class="fields"></div>
+      <details class="advanced-only"><summary>沉降响应参数</summary><div id="response-fields" class="fields"></div><p class="hint">影响半径 = 埋深 ÷ 主要影响角正切。每个开采段按响应时间逐渐沉降。</p></details>
+      <h3>② 地形与水体</h3><label class="check"><input id="terrain-enabled" type="checkbox">启用合成 DEM</label><label class="check"><input id="water-enabled" type="checkbox">加入河流与湖泊</label><div id="environment-fields" class="fields"></div><label class="field advanced-only"><span>地形相位处理</span><select id="topography-mode"><option value="differential">差分干涉图：保留 DEM 误差残差</option><option value="raw">原始干涉图：保留完整地形相位</option></select></label><p class="hint source-note">当前是合成地形与几何水体，不是真实矿区 DEM。</p><h3>③ 相干性与观测噪声</h3><div id="observation-fields" class="fields"></div><label class="field advanced-only"><span>空间平均窗口（地图像素）</span><select id="spatial-window"><option value="1">1 × 1 · 不做空间平均</option><option value="3">3 × 3</option><option value="5">5 × 5</option><option value="7">7 × 7</option><option value="9">9 × 9</option></select></label><details class="advanced-only"><summary>大气、轨道与雷达参数</summary><div id="signal-fields" class="fields"></div><label class="check"><input type="checkbox" id="disturbed-patch">加入局部失真区</label><button id="no-noise" class="secondary">去除观测干扰</button><p class="hint">相关复高斯信号生成两期观测。重复观测平均和空间窗口平均分开控制；地图格网不等同于原始 SAR 距离/方位坐标。</p></details>
+      <details><summary>画幅、标签与复现</summary><label class="field"><span>画幅边长</span><select id="size"><option value="128">128 px</option><option value="256">256 px</option><option value="512">512 px</option></select></label><div id="general-fields" class="fields"></div><p class="hint">标签依据两期垂直沉降增量。几何与观测噪声分开计算。</p><div class="button-row"><button id="save-parameters" class="secondary">保存参数</button><button id="load-parameters" class="secondary">载入参数</button></div><input type="file" id="parameter-file" accept=".json" hidden></details>
+    </div>
+  </aside>
+  <section class="results">
+    <div class="result-title"><div><p class="eyebrow">工作面 → 沉降演变 → 干涉条纹</p><h2>你的模拟场景</h2><p id="description" class="muted"></p></div><button id="export" class="primary" disabled>导出当前样本</button></div>
+    <div class="metrics"><div><span>峰值沉降增量</span><strong id="peak">—</strong></div><div><span>形变相位范围</span><strong id="cycles">—</strong></div><div><span>目标区域</span><strong id="area">—</strong></div><div><span>两面标签交集</span><strong id="overlap">—</strong></div></div>
+    <div class="cards">
+      <article><div class="card-title"><h3><b class="step">01</b> 含噪干涉条纹</h3><span>训练输入</span></div><img id="phase-image" alt="两期位移形成的干涉条纹"><div class="legend"><span>−π</span><i class="phase-bar"></i><span>π</span></div></article>
+      <article><div class="card-title"><h3><b class="step">02</b> 干净参考条纹</h3><select id="phase-view" aria-label="参考条纹内容"><option value="deformation">纯形变</option><option value="reference">含地形与背景</option></select></div><img id="clean-image" alt="干净参考相位"><div class="legend"><span>−π</span><i class="phase-bar"></i><span>π</span></div></article>
+      <article><div class="card-title"><h3><b class="step">03</b> 垂直沉降增量</h3><span>数值真值</span></div><img id="displacement-image" alt="后期减前期的垂直沉降增量"><div class="legend"><span>0</span><i class="amount-bar"></i><span id="heat-max">—</span></div></article>
+      <article><div class="card-title"><h3><b class="step">04</b> 分割标签</h3><label class="check compact"><input id="overlay" type="checkbox">叠加边界</label></div><img id="mask-image" alt="根据无噪声垂直沉降增量生成的标签"><p id="mask-description" class="caption"></p></article>
+    </div>
+    <h2 class="section-heading">场景环境与观测质量</h2><div class="cards environment-cards">
+      <article><div class="card-title"><h3>合成 DEM</h3><span id="dem-range"></span></div><img id="dem-image" alt="合成数字高程模型"><p class="caption">高度参与地形相位和分层大气；沉降模型仍假设水平煤层。</p></article>
+      <article><div class="card-title"><h3>河流与湖泊</h3><span id="water-summary"></span></div><img id="water-image" alt="合成水体范围"><p class="caption">蓝色水体降低相干性，并从训练有效区域中排除。</p></article>
+      <article><div class="card-title"><h3 id="coherence-title">估计相干性</h3><span>黑 0 → 白 1</span></div><img id="coherence-image" alt="复数观测估计相干性"><p id="coherence-summary" class="caption"></p></article>
+      <article><div class="card-title"><h3>工作面与推进</h3><span>俯视图 · 北向上</span></div><canvas id="plan" aria-label="工作面范围与开采进度示意；点击移动当前工作面"></canvas><p class="caption">实线为完整工作面，填色为后期已推进范围；点击移动当前工作面。</p></article>
+    </div>
+    <p id="warnings" class="warning" hidden></p>
+    <article class="profile"><div class="card-title"><h3>前后两期的沉降剖面</h3><span id="profile-row"></span></div><canvas id="profile" aria-label="前期、后期累计沉降及其差值"></canvas><p class="caption"><b class="before">━ 前期</b><b class="after">━ 后期</b><b class="delta">━ 两期增量</b> 横轴：东向距离 m · 纵轴：向下沉降 mm</p></article>
+    <article id="reference-box" class="reference-box" hidden><div class="card-title"><h3>你的 BMP · 外观参考</h3><span>不混入合成训练数据</span></div><div class="reference-layout"><img id="reference-image" alt="本机干涉图外观参考"><div><p><b>本机参考图 · 仅作外观对照</b></p><p>参考其大尺度背景起伏、空间不均匀的颗粒纹理和狭长暗区。暗区的水体属性尚未核实，不能直接作为水体真值。</p><p>尚无颜色到相位的标定关系、像元间距和 DEM，因此这张图只用于视觉对比，不用于反演高程、相干性或标注沉降。黑色边缘也不自动判为水体。</p><p>参考图只用于观察纹理与背景形态，模拟场景参数由左侧设置独立控制。</p></div></div></article>
+    <details class="method"><summary>模型如何计算？</summary><p>工作面沿推进方向分段，每段开采后逐渐产生沉降。空间影响按矩形区域的概率积分计算；分别累加两个时刻的贡献，再求两期位移差，并投影到雷达视线方向。条纹相位 φ = −4πΔLOS/λ。</p><p>合成 DEM 生成地形相位或 DEM 误差残差；大气含空间起伏与高度相关项。水体、时间间隔与坡度调制模型相干性，再生成两期相关复高斯信号，进行重复观测与空间窗口平均，并估计相干性。标签另存数值真值，valid_mask 排除水体和低模型相干区域。</p><p>当前假设水平煤层、矩形工作面，采用分段时间近似；尚未用真实矿区校准，也不包含完整 SAR 成像。通用理论与模型边界见工程内 MODEL.md。</p></details>
+  </section>
+</main>
+<main id="batch-view" hidden>
+  <section class="batch-intro"><p class="eyebrow">可复现的场景与数值真值</p><h2>建立自己的训练数据集</h2><p>独立抽样工作面、推进日期及观测扰动。每张图保存完整生成参数。</p></section>
+  <div class="batch-grid"><article><h3>生成设置</h3><label class="field"><span>数据集名称</span><input id="dataset-name" value="working_faces" maxlength="40"></label><label class="field"><span>样本数量</span><input id="count" type="number" min="50" max="2000" step="1" value="50"></label><p>五种场景均衡抽样：无开采、单工作面、分离双面、近距离双面、错时推进。</p><p class="hint">场景类别描述参数设计；实际重叠面积另行计算。画幅、波长、雷达方向、阈值、分段数、空间窗口和观测次数沿用当前设置。</p><p class="hint">批量会重新抽样工作面几何、位置、日期、大气、坡度、合成地形及相干性。</p><button id="generate" class="primary">生成数据集</button><p id="output-root" class="path"></p></article><article><h3>得到的文件</h3><pre>train / val / test<br>  images/    干涉条纹 PNG<br>  masks/     垂直增量标签 PNG<br>  arrays/    两期位移、相位与分量 NPZ<br>  metadata/  参数与单位<br>manifest.csv  样本与场景清单<br>dataset.json  数据集版本<br>preview.png   样本预览</pre><p>按独立工作面场景划分，50 张样本分为 40 / 5 / 5。可用随附的 PhaseDataset 读取相位 sin/cos 双通道。</p><div id="job" hidden><h3 id="job-title"></h3><progress id="progress" max="50"></progress><p id="progress-text"></p><p id="job-path" class="path"></p><p id="job-error"></p><button id="stop" class="secondary">停止生成</button></div></article></div>
+</main>
+<footer>独立工作面模型工程 · Python + NumPy · 本机保存 <span>合成实验模型，尚未校准真实矿区</span></footer>
+<div id="toast" role="status" hidden></div>
+</body></html>

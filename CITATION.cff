@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this software, cite the version and repository URL. See docs/REFERENCES.md for the scientific foundations."
+title: "Mining InSAR Lab: working-face subsidence and statistical interferogram simulation"
+type: software
+authors:
+  - name: "Mining InSAR Lab contributors"
+version: 2.1.0
+license: MIT
+abstract: "A research prototype for reproducible synthetic mining subsidence, terrain phase, geometric water masks, and statistical complex observations. It has not been calibrated or externally validated on real mines."
+keywords:
+  - InSAR
+  - mining subsidence
+  - synthetic data
+  - probability integral model

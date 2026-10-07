@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+.DS_Store
+exports/
+dist/
+history/
+references/
+web/reference.jpg
+preview*.png
+文件清单.json
+先看这里.txt
+.env
+*.log
