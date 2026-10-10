@@ -4,7 +4,10 @@ title: "Mining InSAR Lab: working-face subsidence and statistical interferogram 
 type: software
 authors:
   - name: "Mining InSAR Lab contributors"
-version: 2.1.0
+version: 2.0.0
+date-released: 2026-10-10
+repository-code: "https://github.com/syz556399-hub/mining-insar-lab"
+url: "https://github.com/syz556399-hub/mining-insar-lab"
 license: MIT
 abstract: "A research prototype for reproducible synthetic mining subsidence, terrain phase, geometric water masks, and statistical complex observations. It has not been calibrated or externally validated on real mines."
 keywords:

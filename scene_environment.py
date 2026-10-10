@@ -2,6 +2,98 @@
 
 import numpy as np
 
+WATER_MODES = ("random", "river", "ponds", "mixed")
+
+
+def water_layout(s):
+    """Seeded geometric scene design, independent of terrain/observation RNGs.
+
+    Shapes are randomized landscape distractors, not DEM-derived hydrology.
+    Width is a reference scale; unresolved or clipped features are not enlarged.
+    """
+    rng = np.random.default_rng(np.random.SeedSequence([s.seed, 2302]))
+    mode = s.water_mode if s.water_enabled else "dry"
+    if mode == "random":
+        mode = str(rng.choice(("river", "ponds", "mixed", "dry"), p=(0.30, 0.30, 0.25, 0.15)))
+    extent = s.extent_m
+    rivers, ponds = [], []
+    if mode in ("river", "mixed") and s.river_width_m > 0:
+        rivers.append(
+            {
+                "angle_rad": float(rng.uniform(0, np.pi)),
+                "offset_m": float(rng.uniform(-0.38, 0.38) * extent),
+                "amplitudes_m": [
+                    float(rng.uniform(0.025, 0.12) * extent),
+                    float(rng.uniform(0.006, 0.04) * extent),
+                ],
+                "cycles": [float(rng.uniform(0.45, 1.25)), float(rng.uniform(1.2, 2.5))],
+                "phases_rad": rng.uniform(0, 2 * np.pi, 2).tolist(),
+                "width_m": float(s.river_width_m * rng.uniform(0.3, 1.0)),
+                "width_variation": float(rng.uniform(0.10, 0.35)),
+                "width_cycles": float(rng.uniform(0.5, 1.8)),
+                "width_phase_rad": float(rng.uniform(0, 2 * np.pi)),
+            }
+        )
+    if mode in ("ponds", "mixed"):
+        count = int(rng.integers(1, 5 if mode == "ponds" else 4))
+        for _ in range(count):
+            ponds.append(
+                {
+                    "east_m": float(rng.uniform(-0.46, 0.46) * extent),
+                    "north_m": float(rng.uniform(-0.46, 0.46) * extent),
+                    "angle_rad": float(rng.uniform(0, np.pi)),
+                    "radii_m": [
+                        float(rng.uniform(0.025, 0.095) * extent),
+                        float(rng.uniform(0.018, 0.065) * extent),
+                    ],
+                    "shore_amplitudes": rng.uniform(0.03, 0.10, 3).tolist(),
+                    "shore_phases_rad": rng.uniform(0, 2 * np.pi, 3).tolist(),
+                }
+            )
+    return {
+        "requested_mode": s.water_mode,
+        "sampled_mode": mode,
+        "rivers": rivers,
+        "ponds": ponds,
+        "model": "random rotated meanders and harmonic irregular shorelines; geometric, not DEM-derived hydrology",
+    }
+
+
+def rasterize_water(layout, east, north, extent_m):
+    water = np.zeros(east.shape, dtype=bool)
+    for river in layout["rivers"]:
+        angle = river["angle_rad"]
+        u = east * np.cos(angle) + north * np.sin(angle)
+        v = -east * np.sin(angle) + north * np.cos(angle)
+        center = np.full(east.shape, river["offset_m"])
+        slope = np.zeros(east.shape)
+        for amplitude, cycles, phase in zip(
+            river["amplitudes_m"], river["cycles"], river["phases_rad"]
+        ):
+            frequency = 2 * np.pi * cycles / extent_m
+            center += amplitude * np.sin(frequency * u + phase)
+            slope += amplitude * frequency * np.cos(frequency * u + phase)
+        width = river["width_m"] * (
+            1
+            + river["width_variation"]
+            * np.sin(2 * np.pi * river["width_cycles"] * u / extent_m + river["width_phase_rad"])
+        )
+        # Local normal-distance approximation to a smooth meander, not exact distance.
+        water |= np.abs(v - center) / np.sqrt(1 + slope**2) < width / 2
+    for pond in layout["ponds"]:
+        x, y = east - pond["east_m"], north - pond["north_m"]
+        angle = pond["angle_rad"]
+        u = (x * np.cos(angle) + y * np.sin(angle)) / pond["radii_m"][0]
+        v = (-x * np.sin(angle) + y * np.cos(angle)) / pond["radii_m"][1]
+        theta = np.arctan2(v, u)
+        shoreline = np.ones(east.shape)
+        for harmonic, amplitude, phase in zip(
+            (3, 4, 5), pond["shore_amplitudes"], pond["shore_phases_rad"]
+        ):
+            shoreline += amplitude * np.cos(harmonic * theta + phase)
+        water |= np.hypot(u, v) < shoreline
+    return water
+
 
 def smooth_field(size, rng, exponent=3):
     noise = rng.normal(size=(size, size))
@@ -16,7 +108,6 @@ def smooth_field(size, rng, exponent=3):
 
 def environment(s, east, north):
     rng = np.random.default_rng(np.random.SeedSequence([s.seed, 2301]))
-    water_rng = np.random.default_rng(np.random.SeedSequence([s.seed, 2302]))
     error_rng = np.random.default_rng(np.random.SeedSequence([s.seed, 2303]))
     relief = smooth_field(s.size, rng)
     dem = (
@@ -24,17 +115,7 @@ def environment(s, east, north):
         if s.terrain_enabled
         else np.full(east.shape, 300.0)
     )
-    water = np.zeros(east.shape, dtype=bool)
-    if s.water_enabled:
-        # 可控几何河流/湖泊，不声称水文流路推导。
-        center = -0.28 * s.extent_m + 0.065 * s.extent_m * np.sin(
-            2 * np.pi * north / s.extent_m + water_rng.uniform(-1, 1)
-        )
-        river = np.abs(east - center) < s.river_width_m / 2
-        lake = ((east - 0.28 * s.extent_m) / (0.12 * s.extent_m)) ** 2 + (
-            (north - 0.25 * s.extent_m) / (0.085 * s.extent_m)
-        ) ** 2 < 1
-        water = river | lake
+    water = rasterize_water(water_layout(s), east, north, s.extent_m)
     dem_error = (
         s.dem_error_m * smooth_field(s.size, error_rng, 2.5)
         if s.terrain_enabled

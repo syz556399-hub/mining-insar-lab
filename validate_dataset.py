@@ -13,6 +13,7 @@ from PIL import Image
 from data_io import phase_rgb
 from mine_model import ENGINE, simulate, wrap
 from provenance import fingerprint, group_identity, runtime_versions
+from task_labels import fringe_support
 
 
 def require(condition, message):
@@ -112,6 +113,12 @@ def validate(root, replay=True):
             np.testing.assert_array_equal(
                 a[mask], a[field] >= settings["target_threshold_mm"] / 1000
             )
+        if "fringe_mask" in a:
+            np.testing.assert_array_equal(
+                a["fringe_mask"],
+                fringe_support(a["deformation_phase_rad"], settings["fringe_threshold_rad"]),
+            )
+            np.testing.assert_array_equal(a["fringe_valid_mask"], np.ones_like(a["mask"]))
         if "valid_mask" in a:
             threshold = settings.get("valid_coherence_threshold", 0.2)
             np.testing.assert_array_equal(

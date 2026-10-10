@@ -2,8 +2,8 @@ import unittest
 
 import numpy as np
 
-from mine_model import default_request, simulate, wrap
-from scene_environment import local_mean
+from mine_model import Settings, default_request, grid, parse_request, simulate, wrap
+from scene_environment import local_mean, rasterize_water, water_layout
 
 
 class EnvironmentTests(unittest.TestCase):
@@ -81,6 +81,56 @@ class EnvironmentTests(unittest.TestCase):
         b, _ = simulate(r)
         for k in a:
             np.testing.assert_array_equal(a[k], b[k])
+
+    def test_random_water_varies_across_seeds(self):
+        # Regression: a fixed river + fixed ellipse must not pass this check.
+        masks, modes, counts = set(), set(), set()
+        for seed in range(40):
+            s = Settings(size=128, seed=seed)
+            east, north = grid(s)
+            layout = water_layout(s)
+            mask = rasterize_water(layout, east, north, s.extent_m)
+            modes.add(layout["sampled_mode"])
+            counts.add(len(layout["ponds"]))
+            if mask.any():
+                masks.add(mask.tobytes())
+            if layout["sampled_mode"] == "dry":
+                self.assertFalse(mask.any())
+        self.assertEqual(modes, {"dry", "river", "ponds", "mixed"})
+        self.assertGreater(len(masks), 25)
+        self.assertGreater(len(counts), 2)
+
+    def test_explicit_water_modes_and_zero_river_width(self):
+        for mode in ("river", "ponds", "mixed"):
+            s = Settings(size=128, water_mode=mode)
+            layout = water_layout(s)
+            self.assertEqual(layout["sampled_mode"], mode)
+            self.assertEqual(bool(layout["rivers"]), mode in ("river", "mixed"))
+            self.assertEqual(bool(layout["ponds"]), mode in ("ponds", "mixed"))
+            east, north = grid(s)
+            self.assertTrue(rasterize_water(layout, east, north, s.extent_m).any())
+        s = Settings(size=128, water_mode="river", river_width_m=0)
+        east, north = grid(s)
+        self.assertFalse(rasterize_water(water_layout(s), east, north, s.extent_m).any())
+
+    def test_water_mode_validation_and_recording(self):
+        request = self.base()
+        for invalid in (False, 1, None, "unknown"):
+            request["settings"]["water_mode"] = invalid
+            with self.assertRaises(ValueError):
+                parse_request(request)
+        request["settings"]["water_mode"] = "mixed"
+        a, metadata = simulate(request)
+        self.assertEqual(metadata["water_scene"]["sampled_mode"], "mixed")
+        s, _ = parse_request(request)
+        east, north = grid(s)
+        np.testing.assert_array_equal(
+            a["water_mask"], rasterize_water(metadata["water_scene"], east, north, s.extent_m)
+        )
+        request["settings"]["water_mode"] = "river"
+        b, _ = simulate(request)
+        for field in ("delta_down_m", "mask", "dem_m", "dem_error_m"):
+            np.testing.assert_array_equal(a[field], b[field])
 
 
 if __name__ == "__main__":

@@ -19,6 +19,16 @@ LOCK = threading.Lock()
 COMPUTE = threading.BoundedSemaphore(2)
 
 
+def latest_segmentation():
+    pointer = ROOT / "runs/segmentation_latest.json"
+    if not pointer.is_file():
+        return None
+    path = (ROOT / json.loads(pointer.read_text(encoding="utf-8"))["prediction"]).resolve()
+    if not path.is_relative_to((ROOT / "runs").resolve()):
+        raise ValueError("分割结果路径无效")
+    return path
+
+
 def preview(request):
     with COMPUTE:
         arrays, metadata = simulate(request)
@@ -118,6 +128,48 @@ class Handler(BaseHTTPRequestHandler):
         if not self.allowed():
             return self.respond({"error": "请通过本机地址访问"}, code=403)
         route = self.path.split("?", 1)[0]
+        if route in ("/audit", "/study"):
+            study = route == "/study"
+            try:
+                pointer = ROOT / ("runs/study_latest.json" if study else "runs/audit_latest.json")
+                folder = (ROOT / json.loads(pointer.read_text(encoding="utf-8"))["audit"]).resolve()
+                if not folder.is_relative_to((ROOT / "runs").resolve()):
+                    raise ValueError("标注检查路径无效")
+                return self.respond(
+                    (folder / "index.html").read_bytes(), "text/html; charset=utf-8"
+                )
+            except (ValueError, KeyError, FileNotFoundError):
+                return self.respond({"error": "请先生成本地标注检查报告"}, code=404)
+        if route == "/segmentation" or route.startswith("/segmentation/artifact/"):
+            try:
+                folder = latest_segmentation()
+                if folder is None:
+                    return self.respond(
+                        "<meta charset='utf-8'><p>还没有完成的分割实验。请先运行 segment.py。</p>".encode(),
+                        "text/html; charset=utf-8",
+                        code=404,
+                    )
+                name = "index.html" if route == "/segmentation" else route.rsplit("/", 1)[-1]
+                types = {
+                    "index.html": "text/html; charset=utf-8",
+                    "learning.html": "text/html; charset=utf-8",
+                    "mask.png": "image/png",
+                    "overlay.png": "image/png",
+                    "boundaries.png": "image/png",
+                    "probability.npy": "application/octet-stream",
+                }
+                if name not in types or route not in (
+                    "/segmentation",
+                    f"/segmentation/artifact/{name}",
+                ):
+                    return self.respond({"error": "结果不存在"}, code=404)
+                return self.respond(
+                    (folder / name).read_bytes(),
+                    types[name],
+                    filename=name if name not in ("index.html", "learning.html") else None,
+                )
+            except (ValueError, KeyError, FileNotFoundError) as error:
+                return self.respond({"error": str(error)}, code=404)
         if route == "/api/defaults":
             return self.respond(
                 {

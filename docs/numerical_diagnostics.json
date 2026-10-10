@@ -1,7 +1,7 @@
 {
-  "engine": "working-face-integral-2.1",
+  "engine": "working-face-integral-2.2",
   "software_versions": {
-    "software": "2.1.0",
+    "software": "2.2.0",
     "python": "3.11.17",
     "numpy": "2.4.6",
     "pillow": "12.3.0"

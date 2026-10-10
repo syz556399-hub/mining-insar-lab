@@ -7,8 +7,9 @@ import platform
 import numpy as np
 from PIL import __version__ as pillow_version
 
-VERSION = "2.1.0"
-ENGINE = "working-face-integral-2.1"
+# Public product version; algorithm engine IDs retain their replay meaning.
+VERSION = "2.0.0"
+ENGINE = "working-face-integral-2.3"
 SCHEMA_VERSION = "1.0"
 
 

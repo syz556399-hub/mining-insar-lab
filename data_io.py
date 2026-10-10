@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image
 
 from mine_model import ENGINE, default_request, parse_request, request_dict, simulate
+from phase_encoding import quantized_phase
 from provenance import SCHEMA_VERSION, fingerprint, runtime_versions
 
 
@@ -42,7 +43,15 @@ def images(arrays):
     interior[0, :] = interior[-1, :] = interior[:, 0] = interior[:, -1] = False
     overlay = observed.copy()
     overlay[mask & ~interior] = [255, 255, 255]
+    fringe = arrays["fringe_mask"].astype(bool)
+    edge = fringe.copy()
+    inside = np.pad(fringe, 1)
+    edge &= ~(inside[:-2, 1:-1] & inside[2:, 1:-1] & inside[1:-1, :-2] & inside[1:-1, 2:])
+    fringe_overlay = observed.copy()
+    fringe_overlay[edge] = [255, 255, 255]
     return {
+        "fringe_mask": arrays["fringe_mask"] * 255,
+        "fringe_overlay": fringe_overlay,
         "observed": observed,
         "deformation": phase_rgb(arrays["deformation_phase_rad"]),
         "reference": phase_rgb(arrays["reference_phase_rad"]),
@@ -76,13 +85,16 @@ def single_archive(request):
             "Independent working-face simulator\n"
             "Coordinates: East, North, Down; length=m; time=day; phase=rad.\n"
             "mask = delta_down_m >= target_threshold_mm/1000.\n"
+            "fringe_mask = abs(clean deformation phase) >= fringe_threshold_rad; experimental task support, not calibrated visible fringe extent. fringe_valid_mask supervises all pixels.\n"
             "reference_phase_rad contains atmosphere, orbit and applied topography; deformation_phase_rad does not.\n"
             "See metadata.observation_model. Statistical complex pairs are not a complete SAR image simulator. Synthetic DEM and water are not measured data. valid_mask follows the exported validity rule and threshold.\n",
         )
     return archive.getvalue()
 
 
-def draw_sample(base, index, category):
+def draw_sample(base, index, category, profile="standard"):
+    if profile not in ("standard", "sparse_mine"):
+        raise ValueError("Unknown sampling profile")
     if category not in ("negative", "single", "separated", "overlapping", "staggered"):
         raise ValueError("Unknown sampling category")
     request = json.loads(json.dumps(base))
@@ -125,10 +137,41 @@ def draw_sample(base, index, category):
         )
         if category == "staggered" and j == 1:
             face["start_day"] = s["day_before"] + float(rng.uniform(-5, 3))
+    if profile == "sparse_mine":
+        # Design ranges, not parameters calibrated from this or any measured mine.
+        s.update(
+            extent_m=float(rng.uniform(1800, 4200)),
+            atmosphere_mm=float(rng.uniform(0.5, 7)),
+            atmosphere_scale_m=float(rng.uniform(120, 1500)),
+            orbit_cycles=float(rng.uniform(-18, 18)),
+            land_coherence=float(rng.uniform(0.35, 0.95)),
+            looks=int(rng.integers(1, 5)),
+            spatial_window=int(rng.choice([1, 3], p=[0.7, 0.3])),
+            dem_error_m=float(rng.uniform(0, 30)),
+            water_enabled=bool(base["settings"]["water_enabled"] and rng.random() < 0.25),
+        )
+        middle = rng.uniform(-0.35, 0.35, 2) * s["extent_m"]
+        gap = rng.uniform(0.03, 0.10) * s["extent_m"]
+        if category == "separated":
+            gap = rng.uniform(0.18, 0.32) * s["extent_m"]
+        for j, face in enumerate(request["faces"]):
+            face.update(
+                east_m=float(middle[0] + (j - 0.5) * gap * np.cos(direction)),
+                north_m=float(middle[1] + (j - 0.5) * gap * np.sin(direction)),
+                length_m=float(rng.uniform(120, 450)),
+                width_m=float(rng.uniform(50, 180)),
+                depth_m=float(rng.uniform(120, 380)),
+                influence_tangent=float(rng.uniform(1.6, 3.0)),
+                thickness_m=float(rng.uniform(0.4, 2.0)),
+            )
     return request
 
 
-def export_dataset(root, count, base, progress=lambda done, total: None, stop=None):
+def export_dataset(
+    root, count, base, progress=lambda done, total: None, stop=None, profile="standard"
+):
+    if profile not in ("standard", "sparse_mine"):
+        raise ValueError("Unknown sampling profile")
     if type(count) is not int or not 50 <= count <= 2000:
         raise ValueError("样本数需为 50–2000 的整数")
     settings, faces = parse_request(base)
@@ -150,10 +193,10 @@ def export_dataset(root, count, base, progress=lambda done, total: None, stop=No
     for index, category, split in records:
         if stop is not None and stop.is_set():
             break
-        request = draw_sample(base, index, category)
+        request = draw_sample(base, index, category, profile)
         arrays, metadata = simulate(request)
         group = f"face_scene_{index:05d}"
-        metadata.update(scene_id=group, category=category, split=split)
+        metadata.update(scene_id=group, category=category, split=split, sampling_profile=profile)
         paths = {
             name: f"{split}/{folder}/{group}{suffix}"
             for name, folder, suffix in [
@@ -212,6 +255,7 @@ def export_dataset(root, count, base, progress=lambda done, total: None, stop=No
         "base_request": base,
         "split_rule": "independent working-face scenes; no scene occurs in more than one split",
         "categories": list(categories),
+        "sampling_profile": profile,
         "category_note": "scenario design labels; actual target overlap is in each metadata.overlap_pixels",
         "label_rule": "vertical subsidence increment threshold; not LOS or noisy image threshold",
     }
@@ -227,10 +271,32 @@ def export_dataset(root, count, base, progress=lambda done, total: None, stop=No
 class PhaseDataset:
     """可直接交给 PyTorch DataLoader；torch 只在读取训练样本时需要。"""
 
-    def __init__(self, root, split="train", return_valid=False):
+    def __init__(
+        self,
+        root,
+        split="train",
+        return_valid=False,
+        input_mode="phase",
+        require_valid=False,
+        phase_bins=0,
+        augment_phase=False,
+        target_mode="physical",
+    ):
         if split not in ("train", "val", "test"):
             raise ValueError("split must be train, val, or test")
+        if input_mode not in ("phase", "rgb"):
+            raise ValueError("input_mode must be phase or rgb")
+        if target_mode not in ("physical", "fringe"):
+            raise ValueError("Unknown target mode")
+        self.target_mode = target_mode
         self.return_valid = return_valid
+        self.input_mode = input_mode
+        self.require_valid = require_valid
+        quantized_phase(np.zeros(1), phase_bins)
+        if (phase_bins or augment_phase) and input_mode != "phase":
+            raise ValueError("Phase quantization/augmentation requires phase input")
+        self.phase_bins = phase_bins
+        self.augment_phase = augment_phase
         self.root = Path(root)
         with (self.root / "manifest.csv").open() as stream:
             self.rows = [row for row in csv.DictReader(stream) if row["split"] == split]
@@ -242,14 +308,28 @@ class PhaseDataset:
         import torch
 
         with np.load(self.root / self.rows[index]["arrays"], allow_pickle=False) as data:
-            phase = data["wrapped_phase_rad"]
-            x = np.stack((np.sin(phase), np.cos(phase))).astype(np.float32)
+            if self.input_mode == "phase":
+                phase = quantized_phase(data["wrapped_phase_rad"], self.phase_bins)
+                if self.augment_phase:
+                    phase = phase * np.random.choice([-1, 1]) + np.random.uniform(-np.pi, np.pi)
+                x = np.stack((np.sin(phase), np.cos(phase))).astype(np.float32)
+            else:
+                with Image.open(self.root / self.rows[index]["image"]) as image:
+                    x = np.asarray(image.convert("RGB"), dtype=np.float32).transpose(2, 0, 1) / 255
             y = data["mask"][None].astype(np.float32)
+            if self.require_valid and "valid_mask" not in data:
+                raise ValueError("Training requires exported valid_mask; regenerate legacy data")
             valid = (
                 data["valid_mask"][None].astype(np.float32)
                 if "valid_mask" in data
                 else np.ones_like(y)
             )
+        if self.target_mode == "fringe":
+            with np.load(self.root / self.rows[index]["arrays"], allow_pickle=False) as data:
+                y = data["fringe_mask"][None].astype(np.float32)
+                valid = data["fringe_valid_mask"][None].astype(np.float32)
+        if x.shape[1:] != y.shape[1:] or valid.shape != y.shape:
+            raise ValueError("Input, label and validity dimensions differ")
         if self.return_valid:
             return torch.from_numpy(x), torch.from_numpy(y), torch.from_numpy(valid)
         return torch.from_numpy(x), torch.from_numpy(y)

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>矿区干涉模拟器 2.0 · 20 张验收</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<header><div><span class="eyebrow">采掘干涉实验室 · 2.0</span><h1>先把模拟影像做对</h1><p>20 张影像与完整沉降范围，逐张检查</p></div><div class="export"><span id="progress">正在读取样本</span><a class="secondary" href="/download/draft">下载 20 张预览包</a><a id="reviewed" class="button disabled" href="/download/reviewed" aria-disabled="true">下载已确认训练样本</a></div></header>
+<div class="intro"><strong>先确认外观与标签</strong><span>使用默认循环色表或你提供的索引 BMP 显示统计。白线是待确认的候选外缘，可调整、可画笔修正。合成 DEM 和水体不代表真实测量。</span></div>
+<div id="message" role="status" aria-live="polite"></div>
+<div class="workspace">
+<aside><div class="aside-title"><strong>20 张样本</strong><span id="review-count">待审核</span></div><div id="samples"></div></aside>
+<main>
+<section class="scene-head"><div><span id="sample-id" class="eyebrow"></span><h2 id="scene-title">正在加载</h2><p id="scene-info"></p></div><div class="nav"><button id="previous" class="secondary">上一张</button><button id="next" class="secondary">下一张</button></div></section>
+<div class="view-bar"><div class="segmented" aria-label="显示风格"><button id="view-bmp">BMP 外观</button><button id="view-research">研究图外观</button></div><span id="selected-style"></span></div>
+<section class="image-grid" aria-label="影像与边界对照">
+<figure><figcaption>模拟影像<span>原始输入</span></figcaption><img id="input" alt="当前模拟干涉影像"></figure>
+<figure><figcaption>完整范围的候选外缘<span>黑白线可修正</span></figcaption><canvas id="overlay" width="256" height="256" aria-label="沉降边界画笔编辑区"></canvas></figure>
+<figure><figcaption>分割标签<span>白色为沉降范围</span></figcaption><canvas id="mask-preview" width="256" height="256" aria-label="二值分割标签"></canvas></figure>
+</section>
+<section class="panel boundary"><div class="panel-head"><h3>边界修正</h3><span id="boundary-status">候选线待确认</span></div>
+<details id="zoom-panel" open><summary>放大看外缘 · 所有对照使用同一裁剪区域</summary><div class="zoom-grid">
+<figure><figcaption>原图<span>先看最外圈条纹</span></figcaption><img id="zoom-input" alt="完整沉降条纹局部放大"></figure>
+<figure><figcaption>稍宽的候选线<span>包含更多外圈</span></figcaption><img id="zoom-wide" alt="较宽候选范围"></figure>
+<figure><figcaption>当前边界<span>目前保存的标签</span></figcaption><img id="zoom-current" alt="当前标签外缘"></figure>
+<figure><figcaption>稍紧的候选线<span>注意是否漏掉外圈</span></figcaption><img id="zoom-tight" alt="较紧候选范围"></figure>
+</div><div class="boundary-tools"><button id="widen" class="secondary">采用稍宽范围</button><button id="tighten" class="secondary">采用稍紧范围</button><button id="default-boundary" class="secondary">采用推荐候选线</button><span id="zoom-note"></span></div></details>
+<div class="boundary-tools"><label>候选范围 <input id="threshold" type="range" min="0.02" max="10" step="0.02" value="0.4"><output id="threshold-value">0.40 rad</output></label><button id="apply-threshold" class="secondary">应用候选范围</button><button id="brush" class="secondary" aria-pressed="false">画笔添加</button><button id="erase" class="secondary" aria-pressed="false">橡皮擦除</button><label>笔宽 <input id="brush-size" type="number" min="1" max="40" value="5"></label><button id="save-mask" class="secondary" disabled>保存手工修正</button><button id="undo" class="secondary" disabled>撤销笔画</button></div><p class="hint">先看外缘是否贴合完整条纹。范围滑块改变无噪声形变的候选轮廓；画笔可以保留小区域与内部空洞，不会自动填洞或抹掉水体里的标签。宽/紧对照是待选候选线，不会自动替换你的标签。</p></section>
+<section class="panel decision"><h3>这张图是否符合你的要求？</h3><label class="note-label">修改意见<textarea id="note" rows="2" placeholder="例如：S02 背景太平，S07 两个盆地应该再靠近，边界再收紧一点"></textarea></label><div class="decision-actions"><button id="accept">影像合适，边界确认</button><button id="reject" class="secondary">需要重做</button><button id="pending" class="secondary">继续保留待审核</button><span id="decision-status"></span></div></section>
+<section class="panel controls"><div class="panel-head"><h3>单景调整</h3><div class="segmented"><button id="simple" class="active">简洁</button><button id="advanced">高级</button></div></div><form id="config"><div class="fields">
+<label>场景<select name="case"><option value="single">单盆地</option><option value="overlap">双盆地重叠</option><option value="separated">双盆地分离</option><option value="small">小范围沉降</option><option value="edge">边缘截断</option><option value="negative">只有背景</option></select></label>
+<label>沉降条纹圈数<input name="cycles" type="number" min="0.5" max="10" step="0.1"></label>
+<label>背景条纹圈数<input name="background_cycles" type="number" min="0" max="12" step="0.1"></label>
+<label>陆地相干程度<input name="coherence" type="number" min="0.2" max="1" step="0.01"></label>
+<label class="check"><input name="water" type="checkbox">少量合成水体</label>
+</div><div class="fields advanced-fields" hidden>
+<label>开采范围形态<select name="footprint"><option value="rectangular">柔和盆地（当前方案）</option><option value="gentle">缓变开采范围（备选）</option></select></label>
+<label>区域边长 / m<input name="extent_m" type="number" min="800" max="6000" step="100"></label>
+<label>影响半径 / 区域边长<input name="target_radius_fraction" type="number" min="0.03" max="0.2" step="0.005"></label>
+<label>背景方向 / °<input name="background_angle_deg" type="number" min="-180" max="180" step="5"></label>
+<label>大气等效 LOS 标准差 / mm<input name="atmosphere_mm" type="number" min="0" max="15" step="0.5"></label>
+<label>合成地形高差 / m<input name="terrain_relief_m" type="number" min="0" max="600" step="10"></label>
+<label>DEM 误差标准差 / m<input name="dem_error_m" type="number" min="0" max="40" step="1"></label>
+<label>垂直基线 / m<input name="baseline_m" type="number" min="-500" max="500" step="10"></label>
+<label>随机种子<input name="seed" type="number" min="0" max="4294967295" step="1"></label>
+<label>形状增强幅度 / 区域边长<input name="shape_warp" type="number" min="0" max="0.04" step="0.002"></label>
+<label>独立复数对数量<select name="looks"><option>1</option><option>2</option><option>4</option><option>8</option></select></label>
+<label>空间复数平均边长<select name="spatial_factor"><option>1</option><option>2</option></select></label>
+</div><div class="generate-actions"><button type="submit" id="generate">按这些参数重新生成</button><button type="button" id="random-seed" class="secondary">换一个随机场景</button><span id="config-status">原样本会保留</span></div></form></section>
+<details class="panel science"><summary>生成原理、真值与限制</summary><p>形变来自本工程独立实现的概率积分法：矩形或宽度、中心线变化的采掘条带推进 → 两期垂直沉降增量 → LOS 投影 → 干涉相位。可选的坐标扰动和幅度缩放属于数据增强，参数有记录，尚未用真实矿区标定。</p><p>背景包含方向可变的条纹、大气扰动与合成 DEM 误差。噪声来自相关复高斯对，先平均复数与强度再取相位；这是地图格网上的观测统计模型，未模拟完整 SAR 成像。</p><p>如提供索引 BMP，仅提取色表和亮度直方图；无参考文件则使用默认循环色表。没有复制原图块，也没有把显示颜色当作真实物理相位。不使用第三方源码或生成图作训练样本。</p><p>高斯影响函数没有唯一的“可见外缘”，目前候选线仍需你确认或修正。确认样本可作为混合训练集的一部分；识别不同来源真实影像的能力需要独立验证。这 20 张只用于验收，不是完整训练集。</p><div class="truth-grid"><figure><figcaption>无噪声沉降增量</figcaption><img id="truth" alt="合成沉降真值"></figure><figure><figcaption>合成 DEM</figcaption><img id="dem" alt="合成地形"></figure><figure><figcaption>估计相干性</figcaption><img id="coherence" alt="样本相干性"></figure></div><pre id="science-data"></pre></details>
+</main></div><footer>本地工作台 · 审核与每次重新生成都有记录 · 同源外观、裁片和增强必须放在同一数据划分</footer>
+<script src="/app.js"></script></body></html>

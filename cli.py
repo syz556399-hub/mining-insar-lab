@@ -19,6 +19,7 @@ def main():
     dataset = sub.add_parser("dataset", help="Generate stratified independent scenes")
     dataset.add_argument("--config", type=Path)
     dataset.add_argument("--count", type=int, default=50)
+    dataset.add_argument("--profile", choices=["standard", "sparse_mine"], default="standard")
     dataset.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     request = (
@@ -42,6 +43,7 @@ def main():
             args.count,
             request,
             lambda n, total: print(f"{n}/{total}", flush=True) if n % 10 == 0 else None,
+            profile=args.profile,
         )
     print(args.out)
 

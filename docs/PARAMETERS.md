@@ -24,9 +24,10 @@ Generated from current dataclasses/defaults and parser ranges. Allowed ranges ar
 | Settings | `complex_observation` | switch | `True` | boolean |
 | Settings | `terrain_enabled` | switch | `True` | boolean |
 | Settings | `water_enabled` | switch | `True` | boolean |
+| Settings | `water_mode` | category | `random` | random / river / ponds / mixed |
 | Settings | `raw_topography` | switch | `False` | boolean |
 | Settings | `relief_m` | m (max-min) | `180.0` | (0, 1500) |
-| Settings | `river_width_m` | m | `65.0` | (0, 500) |
+| Settings | `river_width_m` | m (reference width; actual width varies) | `65.0` | (0, 500) |
 | Settings | `dem_error_m` | m (standard deviation) | `5.0` | (0, 100) |
 | Settings | `baseline_m` | m | `100.0` | (-1000, 1000) |
 | Settings | `slant_range_m` | m | `850000.0` | (500000, 1500000) |

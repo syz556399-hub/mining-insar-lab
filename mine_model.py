@@ -18,7 +18,8 @@ from provenance import (
     group_identity,
     runtime_versions,
 )
-from scene_environment import environment, observe
+from scene_environment import WATER_MODES, environment, observe, water_layout
+from task_labels import fringe_support
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,7 @@ class Settings:
     radar_azimuth_deg: float = 90  # 地面点指向卫星的水平方位：正北=0、正东=90。
     horizontal_factor: float = 0.2
     target_threshold_mm: float = 5
+    fringe_threshold_rad: float = float(np.pi / 2)
     atmosphere_mm: float = 1.5
     atmosphere_scale_m: float = 600
     orbit_cycles: float = 3
@@ -60,6 +62,7 @@ class Settings:
     complex_observation: bool = True
     terrain_enabled: bool = True
     water_enabled: bool = True
+    water_mode: str = "random"
     raw_topography: bool = False
     relief_m: float = 180
     river_width_m: float = 65
@@ -104,6 +107,9 @@ def _construct(cls, values):
         ):
             if type(value) is not bool:
                 raise ValueError(f"{name} 需要是开关")
+        elif name == "water_mode":
+            if not isinstance(value, str) or value not in WATER_MODES:
+                raise ValueError("水体场景请选择 random、river、ponds 或 mixed")
         elif (
             isinstance(value, bool)
             or not isinstance(value, (int, float))
@@ -141,6 +147,7 @@ def parse_request(request):
         "radar_azimuth_deg": (0, 360),
         "horizontal_factor": (0, 0.5),
         "target_threshold_mm": (0.1, 100),
+        "fringe_threshold_rad": (0.01, 20),
         "atmosphere_mm": (0, 20),
         "atmosphere_scale_m": (50, 6000),
         "orbit_cycles": (-30, 30),
@@ -377,6 +384,8 @@ def simulate(request):
     ).astype(np.uint8)
     arrays.update(
         mask=mask,
+        fringe_mask=fringe_support(arrays["deformation_phase_rad"], settings.fringe_threshold_rad),
+        fringe_valid_mask=np.ones_like(mask),
         face_1_mask=labels[0],
         face_2_mask=labels[1],
         water_mask=env["water_mask"],
@@ -405,7 +414,8 @@ def simulate(request):
             else "circular resultant length; not SAR coherence"
         ),
         "calibration_status": "synthetic; no real-mine calibration or external validation",
-        "environment_source": "synthetic spectral terrain and geometric river/lake; not measured DEM",
+        "environment_source": "synthetic spectral terrain and randomized geometric water; not measured DEM or DEM-derived hydrology",
+        "water_scene": water_layout(settings),
         "water_percent": float(env["water_mask"].mean() * 100),
         "valid_percent": float(valid.mean() * 100),
         "mean_model_coherence": float(gamma.mean()),
@@ -425,6 +435,9 @@ def simulate(request):
         "profile_row": peak // settings.size,
         "days": [settings.day_before, settings.day_after],
         "warnings": warnings,
+        "fringe_label_rule": "abs(clean deformation phase) >= fringe_threshold_rad; experimental support proxy, not calibrated visible boundary",
+        "fringe_validity_rule": "all pixels supervised; no automatic water or low-coherence erasure",
+        "fringe_mask_percent": float(arrays["fringe_mask"].mean() * 100),
         "label_rule": "delta_down_m >= target_threshold_mm/1000 before observation disturbances",
         "observation_model": (
             "correlated complex Gaussian pair; independent ensembles and spatial box average on map grid"

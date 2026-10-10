@@ -1,6 +1,6 @@
-# Model specification · engine working-face-integral-2.1
+# Model specification · engine working-face-integral-2.2
 
-This document specifies the implemented model rather than a calibrated prediction method. All assumptions below are part of version 2.1.0. Code is independently written; Gaussian influence kernels, radar phase relations and complex Gaussian statistics are established ideas. [Scientific references and boundaries](docs/REFERENCES.md).
+This document specifies the implemented model rather than a calibrated prediction method. All assumptions below are part of version 2.2.0. Code is independently written; Gaussian influence kernels, radar phase relations and complex Gaussian statistics are established ideas. [Scientific references and boundaries](docs/REFERENCES.md).
 
 ## 1. Coordinates, geometry and units
 
@@ -44,7 +44,7 @@ Positive LOS is increasing ground-satellite distance. Interferometric product is
 
 Synthetic height comes from filtering real white noise in the Fourier domain by (k²+k0²)^(−β/4), inverse FFT, then scaling the relief to the requested min/max range above an arbitrary 300 m base. Its power spectrum is asymptotically k^(−β); no claim of measured terrain or Kolmogorov atmospheric calibration is made. DEM error uses a separate normalized random field with requested standard deviation. Terrain, water and error use separate random streams.
 
-River and ellipse-lake masks are geometric constructions. They do not follow a DEM-derived watershed, fill a constant-elevation basin or reproduce the supplied BMP. Their geometry and power contrast are simplified assumptions.
+Water masks are seeded geometric constructions. The random mode draws river/ponds/mixed/dry with probabilities 0.30/0.30/0.25/0.15; these are dataset design choices, not fitted regional frequencies. A river uses a random rotation, offset, two meander harmonics and a varying width based on river_width_m. Its raster uses a local normal-distance approximation. Ponds use random centers, rotations, axes and harmonic shoreline perturbations; their count is 1–4 for ponds and 1–3 for mixed scenes. All draws are recorded in metadata.water_scene. Geometry is clipped at scene edges and subpixel features are not artificially enlarged. Water still does not follow DEM-derived drainage or fill a constant-elevation basin; randomization improves scene diversity but does not establish hydrological realism.
 
 Small-baseline coefficient T=−4π B⊥/(λ R sin(i)). Full terrain phase is T(h−mean(h)); differential mode uses Tδh, with δh defined by this residual sign convention. Both vanish at zero baseline; differential terrain phase vanishes at zero DEM error. Nonzero baseline at incidence <1° is rejected to avoid singular geometry. This is a local constant-geometry approximation, not slant-range resampling or topographic shadow/layover modeling.
 

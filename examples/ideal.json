@@ -20,6 +20,7 @@
     "complex_observation": true,
     "terrain_enabled": false,
     "water_enabled": false,
+    "water_mode": "random",
     "raw_topography": false,
     "relief_m": 180.0,
     "river_width_m": 65.0,

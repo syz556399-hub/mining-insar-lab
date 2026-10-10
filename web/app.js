@@ -43,7 +43,7 @@ const groups = {
   ],
   'environment-fields': [
     ['relief_m', '地形起伏 / m'],
-    ['river_width_m', '河流宽度 / m'],
+    ['river_width_m', '河道参考宽度 / m'],
     ['dem_error_m', 'DEM 误差 / m']
   ],
   'observation-fields': [
@@ -68,6 +68,7 @@ const groups = {
   ],
   'general-fields': [
     ['extent_m', '场景边长 / m'],
+    ['fringe_threshold_rad', '条纹支持相位阈值 / rad'],
     ['target_threshold_mm', '标签阈值 / mm'],
     ['segments', '推进分段数'],
     ['seed', '随机种子']
@@ -122,6 +123,7 @@ function fields() {
   }
   $('terrain-enabled').checked = request.settings.terrain_enabled;
   $('water-enabled').checked = request.settings.water_enabled;
+  $('water-mode').value = request.settings.water_mode;
   $('topography-mode').value = request.settings.raw_topography ? 'raw' : 'differential';
   $('spatial-window').value = request.settings.spatial_window;
   $('face-enabled').checked = request.faces[activeFace].enabled;
@@ -166,18 +168,20 @@ function render() {
   $('water-image').src = current.images.water;
   $('coherence-image').src = current.images.coherence;
   $('dem-range').textContent = `${m.dem_min_m.toFixed(0)}–${m.dem_max_m.toFixed(0)} m`;
-  $('water-summary').textContent = `水体 ${m.water_percent.toFixed(1)}%`;
+  const waterNames = {river: '河道', ponds: '湖塘', mixed: '河道与湖塘', dry: '无水体'};
+  $('water-summary').textContent = `${waterNames[m.water_scene.sampled_mode]} · ${m.water_percent.toFixed(1)}%`;
   $('coherence-title').textContent = s.complex_observation ? '估计相干性' : '圆周合向量长度';
   $('coherence-summary').textContent = s.complex_observation ? `模型均值 ${m.mean_model_coherence.toFixed(2)} · 估计均值 ${m.mean_estimated_coherence.toFixed(2)} · 有效区 ${m.valid_percent.toFixed(1)}%` : '兼容圆周噪声模式：此图不是 SAR 样本相干性。';
   $('displacement-image').src = current.images.displacement;
-  $('mask-image').src = current.images[$('overlay').checked ? 'overlay' : 'mask'];
+  const fringeView = $('label-view').value === 'fringe';
+  $('mask-image').src = current.images[fringeView ? ($('overlay').checked ? 'fringe_overlay' : 'fringe_mask') : ($('overlay').checked ? 'overlay' : 'mask')];
   $('peak').textContent = m.peak_delta_down_mm.toFixed(1) + ' mm';
   $('cycles').textContent = m.phase_cycles.toFixed(2) + ' 周';
-  $('area').textContent = m.mask_percent.toFixed(1) + '%';
+  $('area').textContent = (fringeView ? m.fringe_mask_percent : m.mask_percent).toFixed(1) + '%';
   $('overlap').textContent = m.overlap_pixels + ' px';
   $('heat-max').textContent = m.peak_delta_down_mm.toFixed(1) + ' mm';
   $('description').textContent = `第 ${s.day_before} → ${s.day_after} 天 · ${(s.extent_m/1000).toFixed(2)} km 场景 · ${s.size} × ${s.size} 像素`;
-  $('mask-description').textContent = `垂直沉降增量 ≥ ${s.target_threshold_mm} mm 的区域为目标。`;
+  $('mask-description').textContent = fringeView ? `干净形变相位绝对值 ≥ ${s.fringe_threshold_rad.toFixed(2)} rad。实验性支持区，不代表已校准的可见条纹边界；低相干区域不自动挖除。` : `垂直沉降增量 ≥ ${s.target_threshold_mm} mm 的区域为目标。`;
   $('profile-row').textContent = `第 ${m.profile_row} 行（从 0 计）`;
   $('warnings').hidden = !m.warnings.length;
   $('warnings').textContent = m.warnings.join(' ');
@@ -279,6 +283,7 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 15000);
 }
 $('phase-view').onchange = () => current && render();
+$('label-view').onchange = () => current && render();
 $('overlay').onchange = () => current && render();
 $('face-a').onclick = () => {
   activeFace = 0;
@@ -304,6 +309,10 @@ $('terrain-enabled').onchange = e => {
 };
 $('water-enabled').onchange = e => {
   request.settings.water_enabled = e.target.checked;
+  schedule();
+};
+$('water-mode').onchange = e => {
+  request.settings.water_mode = e.target.value;
   schedule();
 };
 $('topography-mode').onchange = e => {

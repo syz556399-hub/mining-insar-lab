@@ -5,6 +5,7 @@ import zipfile
 from pathlib import Path
 
 from prepare_release import prepare
+from provenance import VERSION
 
 
 class ReleaseTests(unittest.TestCase):
@@ -15,9 +16,22 @@ class ReleaseTests(unittest.TestCase):
                 names = archive.namelist()
                 self.assertTrue(any(name.endswith("/LICENSE") for name in names))
                 self.assertTrue(any(name.endswith("/web/app.js") for name in names))
+                for required in (
+                    "simulator_v3.py",
+                    "simulator_review.py",
+                    "simulator_batch.py",
+                    "web/simulator-v3/index.html",
+                    "web/simulator-batch/index.html",
+                    "docs/SIMULATOR_REBOOT.md",
+                ):
+                    self.assertIn(f"mining-insar-lab-{VERSION}/{required}", names)
                 self.assertFalse(
                     any(
                         "/exports/" in name
+                        or "/runs/" in name
+                        or "/history/" in name
+                        or "/.venv/" in name
+                        or "/__pycache__/" in name
                         or "/references/" in name
                         or name.endswith("reference.jpg")
                         for name in names
@@ -25,7 +39,7 @@ class ReleaseTests(unittest.TestCase):
                 )
                 self.assertIsNone(archive.testzip())
             manifest = json.loads((Path(result["folder"]) / "SOURCE_MANIFEST.json").read_text())
-            self.assertEqual(manifest["version"], "2.1.0")
+            self.assertEqual(manifest["version"], VERSION)
             # A source-only installation serves no personal reference image.
             self.assertFalse((Path(result["folder"]) / "web/reference.jpg").exists())
 
